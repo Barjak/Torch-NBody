@@ -17,9 +17,11 @@ C_NULL = ctypes.c_void_p(0)
 class Shader(object):
     def __init__(self):
         vertex_shader = shaders.compileShader("""
-            #version 330
+            #version 440
             uniform mat4 view;
-            in vec3 obj_translate;
+            layout(binding = 0) buffer obj_data {
+                float translate[];
+            } obj;
             in float scale;
             in vec3 pos;
             out vec3 pos2;
@@ -28,14 +30,14 @@ class Shader(object):
                 mat4 obj_mat = mat4(1,0,0,0,
                                     0,1,0,0,
                                     0,0,1,0,
-                                    obj_translate[0],obj_translate[1],obj_translate[2],1);
+                                    obj.translate[(3*gl_InstanceID)],obj.translate[(3*gl_InstanceID)+1],obj.translate[(3*gl_InstanceID)+2],1);
                 mat4 scale_mat = mat4(scale,0,0,0,
                                       0,scale,0,0,
                                       0,0,scale,0,
                                       0,0,0,1);
 
                 vec4 position = view * obj_mat * scale_mat * vec4(pos, 1.0f);
-                gl_Position = position;//view * vec4(pos, 1.0f);
+                gl_Position = position;
                 pos2 = vec3(0.0, 0.0, position[2]);
             }
             """, GL_VERTEX_SHADER)
@@ -43,7 +45,7 @@ class Shader(object):
         print(glGetShaderInfoLog(vertex_shader))
 
         fragment_shader = shaders.compileShader( """
-            #version 330
+            #version 440
             in vec3 pos2;
             out vec4 color;
             void main()
@@ -95,21 +97,23 @@ class Model(object):
                 first_word = words[0]
                 words = words[1:]
                 if first_word == "v":
-                    self._vertices += [float(x) for x in words]
+                    self._vertices += [[float(x) for x in words]]
                 elif first_word == "f":
                     face = [int(x.split("/")[0])-1 for x in words]
                     ft = [(face[0], t[0], t[1]) for t in zip(face[1:], face[2:])]
-                    self._indices += list(sum(ft, ()))
-        self._vertices = np.array(self._vertices, dtype=np.float32)
-        self._indices = np.array(self._indices, dtype=np.uint32)
+                    self._indices += ft
+        self._vertices = np.array(np.reshape(self._vertices, -1), dtype=np.float32)
+        self._indices = np.array(np.reshape(self._indices, -1), dtype=np.uint32)
         self.load()
 
     @property
     def n_indices(self):
         return len(self._indices) // 3
+
     @property
     def is_loaded(self):
         return self._is_loaded
+
     def load(self):
         n = len(self._vertices) // 3
         m = len(self._indices) // 3
@@ -119,9 +123,13 @@ class Model(object):
         glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, self.ibuffer)
         glBufferData(GL_ARRAY_BUFFER,         4 * 3 * n, self._vertices, GL_STATIC_DRAW)
         glBufferData(GL_ELEMENT_ARRAY_BUFFER, 4 * 3 * m, self._indices, GL_STATIC_DRAW)
-    def use(self):
+
+    def use(self, attrib):
         glBindBuffer(GL_ARRAY_BUFFER, self.vbuffer)
         glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, self.ibuffer)
+        glVertexAttribPointer(attrib, 3, GL_FLOAT, GL_FALSE, 0, C_NULL)
+        glEnableVertexAttribArray(attrib)
+
     def unload(self):
         glDeleteBuffers(2, (self.vbuffer, self.ibuffer))
 
@@ -149,8 +157,6 @@ class NBody(object):
     def __init__(self, n):
         self.position = torch.randn(20,3)
         self.velocity = torch.randn(20,3)
-
-
 
 
 class Camera(object):
@@ -208,36 +214,35 @@ def main():
     glEnable(GL_DEPTH_TEST)
     glClearColor(1.0,1.0,1.0,1.0)
 
-    shader = Shader()
-
-    model = Model("untitled2.obj")
-
-    glVertexAttribPointer(shader.attrib("pos"), 3, GL_FLOAT, GL_FALSE, 0, C_NULL)
-    glEnableVertexAttribArray(shader.attrib("pos"))
-
-
-    # dar = np.reshape(vertices, (n, 3))
-    # dar = np.hstack((dar, np.ones(n).reshape((n,1))))
-
     # Generate random
-    xyz = 2 * np.random.normal(scale=1., size=(2000,3))
-    xyz = np.array(xyz, dtype=np.float32)
+    xyz = 2 * np.random.normal(scale=1.0, size=(1500,3))
 
-    cam = Camera(90, 0., 0., 0.)
 
-    model.use()
+    cam = Camera(90, 0., 0., -5.)
+    shader = Shader()
+    shader.view = cam.matrix
+
+    model = Model("sphere.obj")
+    model.use(shader.attrib("pos"))
+    shader.scale = 0.05
     m = model.n_indices
+
+    SSB = glGenBuffers(1)
+
     while not glfw.window_should_close(window):
         glfw.poll_events()
         time.sleep(1. / 60.)
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT)
 
-        for ijk in xyz:
-            shader.view = cam.matrix
-            shader.scale = 0.05
-            shader.obj_translate = np.array([ijk[0],ijk[1],-6+ijk[2] + 3 * np.sin(time.time())], dtype=np.float32)
+        time_offset = np.array([0,0,-3 + 6 * np.sin(time.time())])
+        temp = np.array(np.reshape(xyz + time_offset, -1), dtype=np.float32)
 
-            glDrawElements(GL_TRIANGLES, 3 * m, GL_UNSIGNED_INT, None)
+        glBindBuffer(GL_SHADER_STORAGE_BUFFER, SSB)
+        glBufferData(GL_SHADER_STORAGE_BUFFER, 4 * len(temp), temp, GL_DYNAMIC_DRAW)
+        glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 0, SSB)
+
+        # glDrawElements(GL_TRIANGLES, 3 * m, GL_UNSIGNED_INT, None)
+        glDrawElementsInstanced(GL_TRIANGLES, 3 * m, GL_UNSIGNED_INT, None, len(temp))
 
         glfw.swap_buffers(window)
     glfw.terminate()
