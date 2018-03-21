@@ -20,7 +20,7 @@ class Shader(object):
             #version 440
             uniform mat4 view;
             layout(std430, binding = 0) buffer obj_data {
-                float translate[];
+                double translate[];
             } obj;
             in float scale;
             in vec3 pos;
@@ -50,7 +50,7 @@ class Shader(object):
             out vec4 color;
             void main()
             {
-                float l = 1.0 - log2(distance)/log2(32);
+                float l = 1.0 - log2(distance)/6.;
                 color = vec4(l, l, l, 1.0f );
             }
             """ , GL_FRAGMENT_SHADER)
@@ -154,16 +154,43 @@ def scale(xyz):
                      [0,0,0,     1]], dtype=np.float32);
 
 class NBody(object):
-    def __init__(self, n):
-        self.position = torch.randn(20,3)
-        self.velocity = torch.randn(20,3)
+    def __init__(self, n, e=0.001, G=0.001):
+        self.n = n
+        self.e2 = e ** 2
+        self.G = G
+        self.x = np.array(np.random.normal(scale=4., size=(n,3)), dtype=np.double)
+        self.v = np.array(np.random.normal(scale=0.01, size=(n,3)), dtype=np.double)#np.zeros((n,3))
+        self.m = np.array(np.ones(n), dtype=np.double)
+    def step(self, dt):
+        # print("A")
+        dx = self.x[:,np.newaxis,:] - self.x[np.newaxis,:,:]
+        # dv = self.v[:,np.newaxis,:] - self.v[np.newaxis,:,:]
+        # print(dx.shape)
+        # print("B")
+
+        norm2 = np.sum(dx ** 2,axis=2)
+        # print(norm2.shape)
+        # print("C")
+
+        dampened_norm = np.power(norm2 + self.e2, 3/2)
+        # print(denominator.shape)
+        # print("D")
+        a = -self.G * self.m[:,np.newaxis] * np.sum(dx / dampened_norm[:,:,np.newaxis], axis=1)
+        # da = dampened_norm
+        # print(a.shape)
+        # print("F")
+        self.x = self.x + dt*self.v + (dt*dt)*a*0.5
+        # print(self.x.shape)
+        # print("G")
+        self.v = self.v + dt*a
+        # print(self.v.shape)
 
 
 class Camera(object):
     def __init__(self, fov, x, y, z):
         self._fov = fov
         self._xyz = np.array([x,y,z])
-        self._frustum = view_frustum(fov, 1, 0.001, 100.)
+        self._frustum = view_frustum(fov, 1, 0.001, 1000.)
         self._translate = translate(self.xyz)
 
     def set_xyz(self, x, y, z):
@@ -173,7 +200,7 @@ class Camera(object):
             del self._matrix
     def set_fov(self, fov):
         self._fov = fov
-        self._frustum = view_frustum(fov, 1, 0.001, 100.)
+        self._frustum = view_frustum(fov, 1, 0.01, 1000.)
         if hasattr(self, '_matrix'):
             del self._matrix
     @property
@@ -201,6 +228,11 @@ class Camera(object):
 def main():
     # print(view_frustum(90., 3./4., 0.1, 100.))
         # initialize glfw
+    n_particles = 3
+    # for i in range(100000):
+        # print(i)
+        # nbody.step(0.001)
+    # quit(0)
     if not glfw.init():
         return
 
@@ -215,17 +247,18 @@ def main():
     glClearColor(0.0,0.0,0.0,1.0)
 
     # Generate random
-    xyz = 2 * np.random.normal(scale=1.2, size=(200000,3))
+    # xyz = 2 * np.random.normal(scale=1.2, size=(200000,3))
 
-    cam = Camera(110, 0., 0., 0)
+    cam = Camera(90, 0., 0., -20)
     shader = Shader()
     shader.view = cam.matrix
 
     model = Model("sphere.obj")
     model.use(shader.attrib("pos"))
-    shader.scale = 0.01
+    shader.scale = 0.2
     m = model.n_indices
 
+    nbody = NBody(n_particles, 0.5, 0.5)
     SSB = glGenBuffers(1)
     glBindBuffer(GL_SHADER_STORAGE_BUFFER, SSB)
     glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 0, SSB)
@@ -235,14 +268,14 @@ def main():
         time.sleep(1. / 60.)
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT)
 
-        t = time.time()
-        time_offset = np.array([0.005*np.cos(t*26), 0.005*np.sin(t*26), -12 + 11.5 * np.sin(t*.2)])
-        temp = np.array(np.reshape(xyz + time_offset, -1), dtype=np.float32)
+        nbody.step(0.1)
+        # t = time.time()
+        # time_offset = np.array([0.01*np.cos(t*20), 0.01*np.sin(t*20), -5 + 3 * np.sin(t * 0.2)])
+        time_offset = np.array([0,0,0])
+        temp = np.array(np.reshape(nbody.x, -1), dtype=np.double)
+        glBufferData(GL_SHADER_STORAGE_BUFFER, 8 * len(temp), temp, GL_DYNAMIC_DRAW)
 
-        glBufferData(GL_SHADER_STORAGE_BUFFER, 4 * len(temp), temp, GL_DYNAMIC_DRAW)
-
-        # glDrawElements(GL_TRIANGLES, 3 * m, GL_UNSIGNED_INT, None)
-        glDrawElementsInstanced(GL_TRIANGLES, 3 * m, GL_UNSIGNED_INT, None, len(xyz))
+        glDrawElementsInstanced(GL_TRIANGLES, 3 * m, GL_UNSIGNED_INT, None, n_particles)
 
         glfw.swap_buffers(window)
     glfw.terminate()
