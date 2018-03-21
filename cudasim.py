@@ -19,12 +19,12 @@ class Shader(object):
         vertex_shader = shaders.compileShader("""
             #version 440
             uniform mat4 view;
-            layout(binding = 0) buffer obj_data {
+            layout(std430, binding = 0) buffer obj_data {
                 float translate[];
             } obj;
             in float scale;
             in vec3 pos;
-            out vec3 pos2;
+            out float distance;
             void main()
             {
                 mat4 obj_mat = mat4(1,0,0,0,
@@ -38,7 +38,7 @@ class Shader(object):
 
                 vec4 position = view * obj_mat * scale_mat * vec4(pos, 1.0f);
                 gl_Position = position;
-                pos2 = vec3(0.0, 0.0, position[2]);
+                distance = position[2];
             }
             """, GL_VERTEX_SHADER)
         print(glGetShaderiv(vertex_shader, GL_COMPILE_STATUS))
@@ -46,11 +46,11 @@ class Shader(object):
 
         fragment_shader = shaders.compileShader( """
             #version 440
-            in vec3 pos2;
+            in float distance;
             out vec4 color;
             void main()
             {
-                float l = (pos2[2] - 2)/ 10.0;
+                float l = 1.0 - log2(distance)/log2(32);
                 color = vec4(l, l, l, 1.0f );
             }
             """ , GL_FRAGMENT_SHADER)
@@ -204,7 +204,7 @@ def main():
     if not glfw.init():
         return
 
-    window = glfw.create_window(1600, 1600, "My OpenGL window", None, None)
+    window = glfw.create_window(2000, 2000, "My OpenGL window", None, None)
 
     if not window:
         glfw.terminate()
@@ -212,37 +212,37 @@ def main():
 
     glfw.make_context_current(window)
     glEnable(GL_DEPTH_TEST)
-    glClearColor(1.0,1.0,1.0,1.0)
+    glClearColor(0.0,0.0,0.0,1.0)
 
     # Generate random
-    xyz = 2 * np.random.normal(scale=1.0, size=(1500,3))
+    xyz = 2 * np.random.normal(scale=1.2, size=(200000,3))
 
-
-    cam = Camera(90, 0., 0., -5.)
+    cam = Camera(110, 0., 0., 0)
     shader = Shader()
     shader.view = cam.matrix
 
     model = Model("sphere.obj")
     model.use(shader.attrib("pos"))
-    shader.scale = 0.05
+    shader.scale = 0.01
     m = model.n_indices
 
     SSB = glGenBuffers(1)
+    glBindBuffer(GL_SHADER_STORAGE_BUFFER, SSB)
+    glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 0, SSB)
 
     while not glfw.window_should_close(window):
         glfw.poll_events()
         time.sleep(1. / 60.)
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT)
 
-        time_offset = np.array([0,0,-3 + 6 * np.sin(time.time())])
+        t = time.time()
+        time_offset = np.array([0.005*np.cos(t*26), 0.005*np.sin(t*26), -12 + 11.5 * np.sin(t*.2)])
         temp = np.array(np.reshape(xyz + time_offset, -1), dtype=np.float32)
 
-        glBindBuffer(GL_SHADER_STORAGE_BUFFER, SSB)
         glBufferData(GL_SHADER_STORAGE_BUFFER, 4 * len(temp), temp, GL_DYNAMIC_DRAW)
-        glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 0, SSB)
 
         # glDrawElements(GL_TRIANGLES, 3 * m, GL_UNSIGNED_INT, None)
-        glDrawElementsInstanced(GL_TRIANGLES, 3 * m, GL_UNSIGNED_INT, None, len(temp))
+        glDrawElementsInstanced(GL_TRIANGLES, 3 * m, GL_UNSIGNED_INT, None, len(xyz))
 
         glfw.swap_buffers(window)
     glfw.terminate()
