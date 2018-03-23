@@ -13,15 +13,16 @@ from Wavefront_OBJ import Model
 from NBody import NBody, torch_NBody
 
 def main():
+    res = (1600,1200)
     n_particles = 1800
     # nbody = NBody(n_particles, damping=0.5, G=0.01, spread=5.5, mass_pareto=2., velocity_spread=0.5)
-    cam = Camera(80, aspect_ratio=3500/2000, xyz=(0,0,-15))
+    cam = Camera(80, aspect_ratio=res[0]/res[1], xyz=(0,0,-15))
     torch_nbody = torch_NBody(n_particles, damping=0.5, G=0.01, spread=5.5, mass_pareto=2., velocity_spread=0.5)
     # torch_nbody.copy(nbody)
 
     if not glfw.init():
         return
-    window = glfw.create_window(3500, 2000, "", None, None)
+    window = glfw.create_window(res[0], res[1], "", None, None)
     if not window:
         glfw.terminate()
         return

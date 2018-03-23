@@ -46,7 +46,7 @@ class torch_NBody(object):
         self.e2 = other.e2
         self.G = other.G
         self.x = torch.DoubleTensor(other.x).cuda()
-        self.m = torch.DoubleTensor(other.m).cuda().unsqueeze(0).unsqueeze_(2).cuda()
+        self.m = torch.DoubleTensor(other.m).unsqueeze_(0).unsqueeze_(2).cuda()
         self.v = torch.DoubleTensor(other.v).cuda()
         self.da = torch.DoubleTensor(other.da).cuda()
         self.a = torch.DoubleTensor(other.da).zero_().cuda()
