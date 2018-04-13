@@ -12,7 +12,7 @@ class Model(object):
         self._indices = []
         self._is_loaded = False
         with open(name, "r") as f:
-            for line in iter(f.readline, ""):
+            for line in f:
                 words = line.split()
                 first_word = words[0]
                 words = words[1:]
