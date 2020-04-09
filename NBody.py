@@ -10,25 +10,14 @@ class torch_NBody(object):
         self.n = n
         self.e2 = damping ** 2
         self.G = G
-        self.position = self.Type(n,3).normal_(std=spread)
         self.mass = self.Type(np.random.pareto(mass_pareto, size=(n,))).unsqueeze(0).unsqueeze_(2)
+        self.position = self.Type(n,3).normal_(std=spread)
         if velocity_spread <= 0.0:
             self.v = self.Type(n,3).zero_()
         else:
             self.v = self.Type(n,3).normal_(std=velocity_spread)
         self.a = self.Type(n,3).zero_()
         self.da = self.Type(n,3).zero_()
-
-    @torch.no_grad()
-    def copy(self, other):
-        self.n = other.n
-        self.e2 = other.e2
-        self.G = other.G
-        self.position = self.Type(other.x)
-        self.mass = self.Type(other.m).unsqueeze_(0).unsqueeze_(2)
-        self.v = self.Type(other.v)
-        self.da = self.Type(other.da)
-        self.a = self.Type(other.da).zero_()
 
     @torch.no_grad()
     def step(self, dt):
