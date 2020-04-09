@@ -61,5 +61,3 @@ dependencies:
   - xorg-xproto=7.0.31=h14c3975_1007
   - xz=5.2.5=h516909a_0
   - zlib=1.2.11=h516909a_1006
-prefix: /home/worker/miniconda3/envs/env_nbody
-
