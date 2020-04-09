@@ -1,10 +1,16 @@
 # Torch NBody
 
-Experiment in using PyTorch to vectorize NBody simulation. Simple derivative methods. GPU is 30x faster than CPU on my machine. I wonder how a hand-tuned kernel would perform.
+Experiment in using PyTorch to vectorize NBody simulation.
+
+4th Order Hermite method.
+
+
 
 #### Run
-Make sure [PyTorch](http://pytorch.org/) is installed.
+This project uses Conda
 ```
-> pip install glfw pyopengl numpy
+> conda create env -f /big/projects/Torch-NBody/env_nbody.yml 
+> conda activate env_nbody
+> cd Torch-NBody
 > ./cudasim.py
 ```

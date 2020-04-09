@@ -1,24 +1,29 @@
-#!/usr/bin/python3
+#!/usr/bin/env python3
 import torch
 import glfw
 import numpy as np
 from OpenGL.GL import *
 import OpenGL.GL.shaders as shaders
 
-import time
-
 from Shader import Shader as Shader
 from Camera import Camera as Camera
 from Wavefront_OBJ import Model
-from NBody import NBody, torch_NBody
+from NBody import torch_NBody
 
+@torch.no_grad()
 def main():
-    res = (1600,1200)
-    n_particles = 1800
-    # nbody = NBody(n_particles, damping=0.5, G=0.01, spread=5.5, mass_pareto=2., velocity_spread=0.5)
-    cam = Camera(80, aspect_ratio=res[0]/res[1], xyz=(0,0,-15))
-    torch_nbody = torch_NBody(n_particles, damping=0.5, G=0.01, spread=5.5, mass_pareto=2., velocity_spread=0.5)
-    # torch_nbody.copy(nbody)
+    res = (2600,1800)
+    n_particles = 2000
+    cam = Camera(fov=80,
+                 aspect_ratio=res[0]/res[1],
+                 xyz=(0,0,-10))
+    torch_nbody = torch_NBody(n_particles,
+                              damping=0.08,
+                              G=.05,
+                              spread=3.,
+                              mass_pareto=1.7,
+                              velocity_spread=0.5,
+                              dtype=torch.cuda.FloatTensor)
 
     if not glfw.init():
         return
@@ -38,27 +43,39 @@ def main():
     model.use(shader.position)
     m = model.n_indices
 
-    translate  = glGenBuffers(1)
-    scale = glGenBuffers(1)
-    glBindBuffer(GL_SHADER_STORAGE_BUFFER, scale)
-    glBindBufferBase(GL_SHADER_STORAGE_BUFFER, shader.obj_scale, scale)
-    tmpscale = np.array(0.05 * (torch_nbody.m.cpu().view(-1) * .75 / np.pi).pow(1/3).numpy(), dtype=np.double)
-    glBufferData(GL_SHADER_STORAGE_BUFFER, 8 * n_particles, tmpscale, GL_DYNAMIC_DRAW)
+    buffer_translate  = glGenBuffers(1)
+    buffer_scale = glGenBuffers(1)
+    buffer_brightness = glGenBuffers(1)
 
-    glBindBuffer(GL_SHADER_STORAGE_BUFFER, translate)
-    glBindBufferBase(GL_SHADER_STORAGE_BUFFER, shader.obj_translate, translate)
+    glBindBuffer(GL_SHADER_STORAGE_BUFFER, buffer_scale)
+    glBindBufferBase(GL_SHADER_STORAGE_BUFFER, shader.obj_scale, buffer_scale)
+    scale = np.array(0.03 * (torch_nbody.mass.cpu().view(-1) * .75 / np.pi).pow(1/3).to(torch.float32).numpy())
+    glBufferData(GL_SHADER_STORAGE_BUFFER, 4 * n_particles, scale, GL_DYNAMIC_DRAW)
 
-    # shader.view = translate([0,0,-25]) @ view_frustum(120, 3500/2000, 0.01, 1000.)
+    glBindBuffer(GL_SHADER_STORAGE_BUFFER, buffer_translate)
+    glBindBufferBase(GL_SHADER_STORAGE_BUFFER, shader.obj_translate, buffer_translate)
+
+    exposure = 200.0
     while not glfw.window_should_close(window):
+        
         glfw.poll_events()
 
-        # time.sleep(1. / 60.)
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT)
 
         torch_nbody.step(0.01)
 
-        temp = torch_nbody.x.cpu().view(-1).numpy()
-        glBufferData(GL_SHADER_STORAGE_BUFFER, 8 * len(temp), temp, GL_DYNAMIC_DRAW)
+        glBindBufferBase(GL_SHADER_STORAGE_BUFFER, shader.obj_translate, buffer_translate)
+        translate = torch_nbody.position.cpu().view(-1).to(torch.float32).numpy()
+        glBufferData(GL_SHADER_STORAGE_BUFFER, 4 * len(translate), translate, GL_DYNAMIC_DRAW)
+
+        # Example visualization
+        brightness = torch_nbody.a.norm(dim=1)
+        exposure = exposure * 0.98 + brightness.max() * 0.02
+        brightness /= exposure
+        brightness = 0.1 + 0.9 * brightness
+        brightness = brightness.cpu().view(-1).to(torch.float32).numpy()
+        glBindBufferBase(GL_SHADER_STORAGE_BUFFER, shader.obj_brightness, buffer_brightness)
+        glBufferData(GL_SHADER_STORAGE_BUFFER, 4 * len(brightness), brightness, GL_DYNAMIC_DRAW)
 
         glDrawElementsInstanced(GL_TRIANGLES, 3 * m, GL_UNSIGNED_INT, None, n_particles)
 
