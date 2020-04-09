@@ -7,13 +7,18 @@ class Shader(object):
             #version 440
             uniform mat4 view;
             layout(std430, binding = 0) buffer obj_data1 {
-                double obj_translate[];
+                float obj_translate[];
             };
             layout(std430, binding = 1) buffer obj_data2 {
-                double obj_scale[];
+                float obj_scale[];
             };
+            layout(std430, binding = 2) buffer obj_data3 {
+                float obj_brightness[];
+            };
+
             in vec3 position;
             out float distance;
+            out float brightness;
 
             void main()
             {
@@ -33,6 +38,7 @@ class Shader(object):
                 vec4 p = view * obj_mat * scale_mat * vec4(position, 1.0f);
                 gl_Position = p;
                 distance = p[2];
+                brightness = obj_brightness[gl_InstanceID];
             }
             """, GL_VERTEX_SHADER)
         # print(glGetShaderiv(vertex_shader, GL_COMPILE_STATUS))
@@ -40,13 +46,15 @@ class Shader(object):
 
         fragment_shader = shaders.compileShader( """
             #version 440
+            in float brightness;
             in float distance;
             out vec4 color;
 
             void main()
             {
                 float l = 1. - log2(distance) / 5.5;
-                color = vec4(l, l, l, 1.0f );
+            //    color = vec4(l, l, l, 1.0f );
+                color = vec4(brightness*l, brightness*l, brightness*l, 1.0f );
             }
             """ , GL_FRAGMENT_SHADER)
         # print(glGetShaderiv(fragment_shader, GL_COMPILE_STATUS))
@@ -74,3 +82,6 @@ class Shader(object):
     @property
     def obj_scale(self):
         return 1
+    @property
+    def obj_brightness(self):
+        return 2

@@ -10,7 +10,6 @@ class Model(object):
         self._vertices = []
         self._vertex_normals = []
         self._indices = []
-        self._is_loaded = False
         with open(name, "r") as f:
             for line in f:
                 words = line.split()
@@ -31,10 +30,6 @@ class Model(object):
     @property
     def n_indices(self):
         return len(self._indices) // 3
-
-    @property
-    def is_loaded(self):
-        return self._is_loaded
 
     def load(self):
         if self.vbuffer != -1 or self.ibuffer != -1:
