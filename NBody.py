@@ -32,20 +32,18 @@ class torch_NBody(object):
 
     @torch.no_grad()
     def step(self, dt):
-        '''Explicitly calculate a and da/dt; guess at da/dtt.'''
 # TODO: Calculate only the lower triangle of each matrix and copy it to the upper?
 #       Must use entire matrix because of mass calculation
 
         dx = self.position.unsqueeze(1) - self.position.unsqueeze(0) #(n,n,3)
         dv = self.v.unsqueeze(1) - self.v.unsqueeze(0) #(n,n,3)
-
         dampened_norm = dx.pow(2).sum(dim=2).add_(self.e2) #(n,n)
         dampened_norm_32 = dampened_norm.pow(3/2).unsqueeze(2) #(n,n,1)
         dampened_norm_52 = dampened_norm.pow(5/2) #(n,n)
-        # Take the dot product of every point on the nxn grid.
-        # dx_[i,j] . dv_[i,j]
+
 # TODO: Profile and see which version is faster
 #        ijk_ijk__ij = torch.einsum("ijk,ijk->ij", dx,dv) # (n,n)
+
         ijk_ijk__ij = (dx.view(-1, 1, 3) @ dv.view(-1, 3, 1)).view_as(dampened_norm_52)
 
         a = -self.G * (self.mass * (dx / dampened_norm_32)).sum(dim=1)
