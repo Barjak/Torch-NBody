@@ -9,7 +9,7 @@ Experiment in using PyTorch to vectorize NBody simulation.
 #### Run
 This project uses Conda
 ```
-> conda create env -f ./Torch-NBody/env_nbody.yml 
+> conda env create -f ./Torch-NBody/env_nbody.yml 
 > conda activate env_nbody
 > cd Torch-NBody
 > ./cudasim.py
