@@ -52,7 +52,7 @@ class Shader(object):
 
             void main()
             {
-                float l = 1. - log2(distance) / 5.5;
+                float l = 1. - log2(distance) / 12.0;
             //    color = vec4(l, l, l, 1.0f );
                 color = vec4(brightness*l, brightness*l, brightness*l, 1.0f );
             }

@@ -13,16 +13,16 @@ from NBody import torch_NBody
 @torch.no_grad()
 def main():
     res = (2600,1800)
-    n_particles = 2000
+    n_particles = 1500                                      # Number of bodies. My computer runs 2000 pretty comfortably.
     cam = Camera(fov=80,
                  aspect_ratio=res[0]/res[1],
                  xyz=(0,0,-10))
     torch_nbody = torch_NBody(n_particles,
-                              damping=0.08,
-                              G=.05,
-                              spread=3.,
-                              mass_pareto=1.7,
-                              velocity_spread=0.5,
+                              damping=0.10,                 # Prevent bodies from hitting lightspeed when they get too close
+                              G=.05,                        # Gravity strength
+                              spread=3.0,                   # Place bodies in a normal distribution with this standard deviation
+                              mass_pareto=1.9,              # The masses of the bodies follow this Pareto distribution
+                              velocity_spread=0.5,          # Initial velocity vectors are normally distributed with this standard deviation
                               dtype=torch.cuda.FloatTensor)
 
     if not glfw.init():
@@ -72,7 +72,7 @@ def main():
         brightness = torch_nbody.a.norm(dim=1)
         exposure = exposure * 0.98 + brightness.max() * 0.02
         brightness /= exposure
-        brightness = 0.1 + 0.9 * brightness
+        brightness = 0.2 + 0.9 * brightness
         brightness = brightness.cpu().view(-1).to(torch.float32).numpy()
         glBindBufferBase(GL_SHADER_STORAGE_BUFFER, shader.obj_brightness, buffer_brightness)
         glBufferData(GL_SHADER_STORAGE_BUFFER, 4 * len(brightness), brightness, GL_DYNAMIC_DRAW)
